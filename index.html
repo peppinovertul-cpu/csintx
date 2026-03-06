@@ -1030,45 +1030,44 @@ function finishQuery(result, btn) {
   btn.textContent = 'Cerca →';
 }
 
-var GHOSINT_KEY = '3982a6571d1cea8961cc2abab6fc0a1e';
-var GHOSINT_BASE = 'https://corsproxy.io/?https://api.ghosint.io';
+var BREACH_VIP_BASE = 'https://breach.vip/api/search';
 
-// Servizi da interrogare per ogni tipo di query
-var GHOSINT_SERVICES = {
-  email:    ['ghosint.search','leakcheck','snusbase','breachvip','leakosint','seon'],
-  phone:    ['ghosint.search','snusbase','breachvip','leakosint','seon'],
-  username: ['ghosint.search','leakcheck','snusbase','breachvip','leakosint'],
-  ip:       ['ghosint.search','snusbase','breachvip','leakosint'],
-  password: ['snusbase','breachvip'],
-  discord:  ['ghosint.search','leakosint'],
-  facebook: ['ghosint.search','leakosint'],
-  steam:    ['ghosint.search','leakosint'],
-  fivem:    ['ghosint.search','leakosint']
+// Mapping tipo query -> fields breach.vip
+var BREACH_FIELDS_MAP = {
+  email:    ['email'],
+  phone:    ['phone'],
+  username: ['username'],
+  ip:       ['ip'],
+  password: ['password'],
+  discord:  ['discordid'],
+  steam:    ['steamid'],
+  facebook: ['name'],
+  fivem:    ['username']
 };
 
-function ghosintFetch(query, services) {
-  var body = { key: GHOSINT_KEY, query: query, services: services };
-  console.log('[ghosint] POST', GHOSINT_BASE + '/search', JSON.stringify(body));
-  return fetch(GHOSINT_BASE + '/search', {
+function ghosintFetch(query, type) {
+  var fields = BREACH_FIELDS_MAP[type] || ['email'];
+  var body = { term: query, fields: fields, wildcard: false, case_sensitive: false };
+  console.log('[breach.vip] POST', BREACH_VIP_BASE, JSON.stringify(body));
+  return fetch(BREACH_VIP_BASE, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
     body: JSON.stringify(body)
   }).then(function(r){
-    console.log('[ghosint] HTTP status:', r.status, r.statusText);
+    console.log('[breach.vip] HTTP status:', r.status, r.statusText);
     return r.json();
   }).then(function(d){
-    console.log('[ghosint] Response:', JSON.stringify(d));
-    // Mostra raw response nel debug panel
+    console.log('[breach.vip] Response:', JSON.stringify(d));
     var dbg = document.getElementById('ghosint-debug');
     if (dbg) {
       dbg.style.display = 'block';
-      dbg.querySelector('pre').textContent = 'POST ' + GHOSINT_BASE + '/search\n' +
+      dbg.querySelector('pre').textContent = 'POST ' + BREACH_VIP_BASE + '\n' +
         'Body: ' + JSON.stringify(body, null, 2) + '\n\n' +
         'Response:\n' + JSON.stringify(d, null, 2);
     }
     return d;
   }).catch(function(err){
-    console.error('[ghosint] Fetch error:', err);
+    console.error('[breach.vip] Fetch error:', err);
     var dbg = document.getElementById('ghosint-debug');
     if (dbg) {
       dbg.style.display = 'block';
@@ -1079,16 +1078,9 @@ function ghosintFetch(query, services) {
 }
 
 function parseGhosintResponse(gh) {
-  // La risposta ha { success: true, response: { service1: [...], service2: [...] } }
-  if (!gh || !gh.success || !gh.response) return null;
-  var merged = [];
-  Object.keys(gh.response).forEach(function(svc) {
-    var items = gh.response[svc];
-    if (Array.isArray(items)) {
-      items.forEach(function(item){ item._source = svc; merged.push(item); });
-    }
-  });
-  return merged;
+  // breach.vip risponde con { results: [...] }
+  if (!gh || !Array.isArray(gh.results)) return null;
+  return gh.results;
 }
 
 function doQuery() {
@@ -1107,14 +1099,14 @@ function doQuery() {
 
   var ts = new Date().toISOString();
   var type = S.queryType;
-  var services = GHOSINT_SERVICES[type] || ['ghosint.search','leakosint'];
+  var services = type; // breach.vip usa il tipo direttamente
 
   // ── IP: ip-api.com (geo) + ghosint (leak data) ───────────────────────
   if (type === 'ip') {
     Promise.all([
       fetch('http://ip-api.com/json/' + encodeURIComponent(val) + '?fields=status,message,country,countryCode,region,regionName,city,zip,lat,lon,timezone,isp,org,as,query')
         .then(function(r){ return r.json(); }).catch(function(){ return null; }),
-      ghosintFetch(val, services).catch(function(){ return null; })
+      ghosintFetch(val, type).catch(function(){ return null; })
     ]).then(function(results) {
       var geo = results[0], gh = results[1];
       var records = parseGhosintResponse(gh);
@@ -1130,7 +1122,7 @@ function doQuery() {
       if (records && records.length > 0) {
         result.leak_records = records;
         result.total_records_found = records.length;
-        result.sources.push('ghosint.io');
+        result.sources.push('breach.vip');
       }
       finishQuery(result, btn);
     }).catch(function(){ finishQuery(generateMock('ip', val), btn); showToast('Errore IP lookup', 'err'); });
@@ -1143,22 +1135,19 @@ function doQuery() {
       steam: 'steam_lookup', fivem: 'fivem_lookup', password: 'password_lookup'
     };
     var sourceMap = {
-      email: 'ghosint.io — LeakCheck + SnusBase + Breach.vip + LeakOsint + SEON',
-      phone: 'ghosint.io — SnusBase + Breach.vip + LeakOsint + SEON',
-      username: 'ghosint.io — LeakCheck + SnusBase + Breach.vip + LeakOsint',
-      password: 'ghosint.io — SnusBase + Breach.vip',
-      discord: 'ghosint.io — LeakOsint', facebook: 'ghosint.io — LeakOsint',
-      steam: 'ghosint.io — LeakOsint', fivem: 'ghosint.io — LeakOsint'
+      email: 'breach.vip', phone: 'breach.vip', username: 'breach.vip',
+      password: 'breach.vip', discord: 'breach.vip', facebook: 'breach.vip',
+      steam: 'breach.vip', fivem: 'breach.vip'
     };
     var queryVal = type === 'password' ? val : val;
-    ghosintFetch(queryVal, services).then(function(gh) {
+    ghosintFetch(queryVal, type).then(function(gh) {
       var records = parseGhosintResponse(gh);
       var result = {
         query: type === 'password' ? '**REDACTED**' : val,
         type: labelMap[type] || type + '_lookup',
         timestamp: ts,
-        source: sourceMap[type] || 'ghosint.io',
-        services_queried: services
+        source: sourceMap[type] || 'breach.vip',
+        services_queried: [type]
       };
       if (records && records.length > 0) {
         result.total_records_found = records.length;
