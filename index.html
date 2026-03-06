@@ -537,9 +537,9 @@ footer{position:relative;z-index:1;border-top:1px solid var(--border);padding:28
         <div class="mod-icon"><svg width="26" height="26" viewBox="0 0 28 28" fill="none"><path d="M14 3C8 3 4 7.5 4 14s4 11 10 11 10-4.5 10-11S20 3 14 3z" stroke="rgba(255,255,255,.55)" stroke-width="1.5" fill="rgba(255,255,255,.04)"/><path d="M9 11h6a3 3 0 010 6H9V11z" stroke="rgba(255,255,255,.55)" stroke-width="1.5" fill="rgba(255,255,255,.04)" stroke-linejoin="round"/></svg></div>
         <div><div class="mod-name">breach.rip</div><div class="mod-sub">BREACH DATABASE API</div><div class="mod-status"><div class="dot"></div><span class="dot-label">ATTIVO</span></div></div>
       </a>
-      <a href="https://breach.vip" target="_blank" class="mod-card">
+      <a href="https://breach.rip" target="_blank" class="mod-card">
         <div class="mod-icon"><svg width="26" height="26" viewBox="0 0 28 28" fill="none"><path d="M14 2L26 8v12L14 26 2 20V8z" stroke="rgba(255,255,255,.55)" stroke-width="1.5" fill="rgba(255,255,255,.04)" stroke-linejoin="round"/><path d="M9 14l4 4 7-8" stroke="rgba(255,255,255,.75)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
-        <div><div class="mod-name">breach.vip</div><div class="mod-sub">VIP INTELLIGENCE API</div><div class="mod-status"><div class="dot" style="animation-delay:.3s"></div><span class="dot-label">ATTIVO</span></div></div>
+        <div><div class="mod-name">breach.rip</div><div class="mod-sub">BREACH.RIP INTELLIGENCE</div><div class="mod-status"><div class="dot" style="animation-delay:.3s"></div><span class="dot-label">ATTIVO</span></div></div>
       </a>
       <a href="https://leak.osint" target="_blank" class="mod-card">
         <div class="mod-icon"><svg width="26" height="26" viewBox="0 0 28 28" fill="none"><circle cx="12" cy="12" r="8" stroke="rgba(255,255,255,.55)" stroke-width="1.5" fill="rgba(255,255,255,.04)"/><path d="M18 18l6 6" stroke="rgba(255,255,255,.55)" stroke-width="2" stroke-linecap="round"/><path d="M9 12h6M12 9v6" stroke="rgba(255,255,255,.65)" stroke-width="1.5" stroke-linecap="round"/></svg></div>
@@ -1033,61 +1033,123 @@ function finishQuery(result, btn) {
 var BREACH_RIP_BASE = 'https://www.breach.rip/api';
 var BREACH_RIP_KEY = 'T44QdtP1r6QDS3HwvOpmDouVxHSTQPxf';
 
-function ghosintFetch(query, type) {
-  // Scegli endpoint in base al tipo
-  var endpoint, method = 'POST', body = null, params = '';
-  if (type === 'email') {
-    endpoint = '/breachlookup/universal';
-    body = { query: query, type: 'email' };
-  } else if (type === 'username') {
-    endpoint = '/breachlookup/universal';
-    body = { query: query, type: 'username' };
-  } else if (type === 'phone') {
-    endpoint = '/breachlookup/universal';
-    body = { query: query, type: 'phone' };
-  } else if (type === 'password') {
-    endpoint = '/breachlookup/universal';
-    body = { query: query, type: 'password' };
-  } else if (type === 'ip') {
-    endpoint = '/breachlookup/universal';
-    body = { query: query, type: 'ip' };
-  } else if (type === 'discord') {
-    endpoint = '/breachlookup/universal';
-    body = { query: query, type: 'discord' };
-  } else if (type === 'steam') {
-    endpoint = '/breachlookup/universal';
-    body = { query: query, type: 'steam' };
-  } else {
-    endpoint = '/breachlookup/universal';
-    body = { query: query, type: type };
-  }
-
+// Esegue una singola chiamata POST a breach.rip
+function brCall(endpoint, body) {
   var url = BREACH_RIP_BASE + endpoint;
-  console.log('[breach.rip] POST', url, JSON.stringify(body));
-
   return fetch(url, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Accept': 'application/json',
-      'X-API-Key': BREACH_RIP_KEY
-    },
+    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-API-Key': BREACH_RIP_KEY },
     body: JSON.stringify(body)
-  }).then(function(r){
-    console.log('[breach.rip] HTTP status:', r.status, r.statusText);
-    return r.json();
-  }).then(function(d){
-    console.log('[breach.rip] Response:', JSON.stringify(d));
+  }).then(function(r){ return r.json(); }).catch(function(){ return null; });
+}
+
+// Esegue una singola chiamata GET a breach.rip
+function brGet(endpoint) {
+  var url = BREACH_RIP_BASE + endpoint;
+  return fetch(url, {
+    method: 'GET',
+    headers: { 'Accept': 'application/json', 'X-API-Key': BREACH_RIP_KEY }
+  }).then(function(r){ return r.json(); }).catch(function(){ return null; });
+}
+
+// Mappa tipo -> lista di chiamate da fare in parallelo
+function getBreachCalls(query, type) {
+  switch(type) {
+    case 'email':
+      return [
+        brCall('/breachlookup/universal', { query: query, type: 'email' }),
+        brCall('/osintdog/universal', { query: query }),
+        brCall('/intelbase/email', { email: query }),
+        brCall('/breachhub/snusbase', null) // GET via alias
+      ];
+    case 'username':
+      return [
+        brCall('/breachlookup/universal', { query: query, type: 'username' }),
+        brCall('/osintdog/universal', { query: query }),
+        brCall('/intelbase/unified', { query: query, type: 'username' }),
+        brGet('/osintcat/username?username=' + encodeURIComponent(query))
+      ];
+    case 'phone':
+      return [
+        brCall('/breachlookup/universal', { query: query, type: 'phone' }),
+        brCall('/osintdog/universal', { query: query }),
+        brCall('/intelbase/phone', { phone: query }),
+        brGet('/osintcat/phone?phone=' + encodeURIComponent(query))
+      ];
+    case 'ip':
+      return [
+        brCall('/breachlookup/universal', { query: query, type: 'ip' }),
+        brCall('/osintdog/universal', { query: query }),
+        brCall('/intelbase/ip', { ip: query }),
+        brCall('/stealerlogs/ip-geolocation', { ip: query })
+      ];
+    case 'password':
+      return [
+        brCall('/breachlookup/universal', { query: query, type: 'password' }),
+        brCall('/osintdog/universal', { query: query }),
+        brCall('/intelbase/unified', { query: query, type: 'password' })
+      ];
+    case 'discord':
+      return [
+        brCall('/breachlookup/universal', { query: query, type: 'discord' }),
+        brCall('/intelbase/discord', { discord_id: query }),
+        brCall('/oathnet/discord-user', { user_id: query }),
+        brGet('/osintcat/discord?discord_id=' + encodeURIComponent(query))
+      ];
+    case 'steam':
+      return [
+        brCall('/breachlookup/universal', { query: query, type: 'steam' }),
+        brCall('/oathnet/steam', { steam_id: query }),
+        brGet('/osintcat/roblox?username=' + encodeURIComponent(query))
+      ];
+    case 'facebook':
+      return [
+        brCall('/breachlookup/universal', { query: query, type: 'username' }),
+        brCall('/osintdog/universal', { query: query }),
+        brCall('/intelbase/unified', { query: query, type: 'username' })
+      ];
+    case 'fivem':
+      return [
+        brCall('/breachlookup/universal', { query: query, type: 'username' }),
+        brCall('/intelbase/unified', { query: query, type: 'username' })
+      ];
+    default:
+      return [ brCall('/breachlookup/universal', { query: query, type: type }) ];
+  }
+}
+
+function ghosintFetch(query, type) {
+  var calls = getBreachCalls(query, type);
+  return Promise.all(calls).then(function(responses) {
+    // Merge tutte le risposte in un unico oggetto
+    var merged = { results: [], sources: [] };
+    responses.forEach(function(d, i) {
+      if (!d) return;
+      var arr = null;
+      if (Array.isArray(d.results)) arr = d.results;
+      else if (Array.isArray(d.data)) arr = d.data;
+      else if (Array.isArray(d.records)) arr = d.records;
+      else if (d.result && typeof d.result === 'object') arr = [d.result];
+      if (arr && arr.length > 0) {
+        arr.forEach(function(item){ item._source = 'breach.rip[' + i + ']'; });
+        merged.results = merged.results.concat(arr);
+      }
+      // Aggiungi campi extra dalla risposta
+      ['email','username','phone','ip','discord_id','steam_id','country','isp'].forEach(function(k){
+        if (d[k] && !merged[k]) merged[k] = d[k];
+      });
+    });
+    // Mostra debug
     var dbg = document.getElementById('ghosint-debug');
     if (dbg) {
       dbg.style.display = 'block';
-      dbg.querySelector('pre').textContent = 'POST ' + url + '\n' +
-        'Body: ' + JSON.stringify(body, null, 2) + '\n\n' +
-        'Response:\n' + JSON.stringify(d, null, 2);
+      dbg.querySelector('pre').textContent = 'breach.rip — ' + calls.length + ' chiamate parallele\n' +
+        'Totale record: ' + merged.results.length + '\n\n' +
+        'Raw responses:\n' + JSON.stringify(responses, null, 2);
     }
-    return d;
+    return merged;
   }).catch(function(err){
-    console.error('[breach.rip] Fetch error:', err);
+    console.error('[breach.rip] Errore:', err);
     var dbg = document.getElementById('ghosint-debug');
     if (dbg) {
       dbg.style.display = 'block';
@@ -1099,8 +1161,7 @@ function ghosintFetch(query, type) {
 
 function parseGhosintResponse(gh) {
   if (!gh) return null;
-  // breach.rip universal search risponde con { results: [...] } o { data: [...] }
-  if (Array.isArray(gh.results)) return gh.results;
+  if (Array.isArray(gh.results) && gh.results.length > 0) return gh.results;
   if (Array.isArray(gh.data)) return gh.data;
   if (gh.success && Array.isArray(gh.records)) return gh.records;
   return null;
@@ -1122,7 +1183,7 @@ function doQuery() {
 
   var ts = new Date().toISOString();
   var type = S.queryType;
-  var services = type; // breach.vip usa il tipo direttamente
+  var services = type; // breach.rip usa il tipo direttamente
 
   // ── IP: ip-api.com (geo) + ghosint (leak data) ───────────────────────
   if (type === 'ip') {
@@ -1145,7 +1206,7 @@ function doQuery() {
       if (records && records.length > 0) {
         result.leak_records = records;
         result.total_records_found = records.length;
-        result.sources.push('breach.vip');
+        result.sources.push('breach.rip');
       }
       finishQuery(result, btn);
     }).catch(function(){ finishQuery(generateMock('ip', val), btn); showToast('Errore IP lookup', 'err'); });
@@ -1158,9 +1219,9 @@ function doQuery() {
       steam: 'steam_lookup', fivem: 'fivem_lookup', password: 'password_lookup'
     };
     var sourceMap = {
-      email: 'breach.vip', phone: 'breach.vip', username: 'breach.vip',
-      password: 'breach.vip', discord: 'breach.vip', facebook: 'breach.vip',
-      steam: 'breach.vip', fivem: 'breach.vip'
+      email: 'breach.rip', phone: 'breach.rip', username: 'breach.rip',
+      password: 'breach.rip', discord: 'breach.rip', facebook: 'breach.rip',
+      steam: 'breach.rip', fivem: 'breach.rip'
     };
     var queryVal = type === 'password' ? val : val;
     ghosintFetch(queryVal, type).then(function(gh) {
@@ -1169,7 +1230,7 @@ function doQuery() {
         query: type === 'password' ? '**REDACTED**' : val,
         type: labelMap[type] || type + '_lookup',
         timestamp: ts,
-        source: sourceMap[type] || 'breach.vip',
+        source: sourceMap[type] || 'breach.rip',
         services_queried: [type]
       };
       if (records && records.length > 0) {
