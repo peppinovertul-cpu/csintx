@@ -1030,44 +1030,64 @@ function finishQuery(result, btn) {
   btn.textContent = 'Cerca →';
 }
 
-var BREACH_VIP_BASE = 'https://breach.vip/api/search';
-
-// Mapping tipo query -> fields breach.vip
-var BREACH_FIELDS_MAP = {
-  email:    ['email'],
-  phone:    ['phone'],
-  username: ['username'],
-  ip:       ['ip'],
-  password: ['password'],
-  discord:  ['discordid'],
-  steam:    ['steamid'],
-  facebook: ['name'],
-  fivem:    ['username']
-};
+var BREACH_RIP_BASE = 'https://www.breach.rip/api';
+var BREACH_RIP_KEY = 'T44QdtP1r6QDS3HwvOpmDouVxHSTQPxf';
 
 function ghosintFetch(query, type) {
-  var fields = BREACH_FIELDS_MAP[type] || ['email'];
-  var body = { term: query, fields: fields, wildcard: false, case_sensitive: false };
-  console.log('[breach.vip] POST', BREACH_VIP_BASE, JSON.stringify(body));
-  return fetch(BREACH_VIP_BASE, {
+  // Scegli endpoint in base al tipo
+  var endpoint, method = 'POST', body = null, params = '';
+  if (type === 'email') {
+    endpoint = '/breachlookup/universal';
+    body = { query: query, type: 'email' };
+  } else if (type === 'username') {
+    endpoint = '/breachlookup/universal';
+    body = { query: query, type: 'username' };
+  } else if (type === 'phone') {
+    endpoint = '/breachlookup/universal';
+    body = { query: query, type: 'phone' };
+  } else if (type === 'password') {
+    endpoint = '/breachlookup/universal';
+    body = { query: query, type: 'password' };
+  } else if (type === 'ip') {
+    endpoint = '/breachlookup/universal';
+    body = { query: query, type: 'ip' };
+  } else if (type === 'discord') {
+    endpoint = '/breachlookup/universal';
+    body = { query: query, type: 'discord' };
+  } else if (type === 'steam') {
+    endpoint = '/breachlookup/universal';
+    body = { query: query, type: 'steam' };
+  } else {
+    endpoint = '/breachlookup/universal';
+    body = { query: query, type: type };
+  }
+
+  var url = BREACH_RIP_BASE + endpoint;
+  console.log('[breach.rip] POST', url, JSON.stringify(body));
+
+  return fetch(url, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+      'X-API-Key': BREACH_RIP_KEY
+    },
     body: JSON.stringify(body)
   }).then(function(r){
-    console.log('[breach.vip] HTTP status:', r.status, r.statusText);
+    console.log('[breach.rip] HTTP status:', r.status, r.statusText);
     return r.json();
   }).then(function(d){
-    console.log('[breach.vip] Response:', JSON.stringify(d));
+    console.log('[breach.rip] Response:', JSON.stringify(d));
     var dbg = document.getElementById('ghosint-debug');
     if (dbg) {
       dbg.style.display = 'block';
-      dbg.querySelector('pre').textContent = 'POST ' + BREACH_VIP_BASE + '\n' +
+      dbg.querySelector('pre').textContent = 'POST ' + url + '\n' +
         'Body: ' + JSON.stringify(body, null, 2) + '\n\n' +
         'Response:\n' + JSON.stringify(d, null, 2);
     }
     return d;
   }).catch(function(err){
-    console.error('[breach.vip] Fetch error:', err);
+    console.error('[breach.rip] Fetch error:', err);
     var dbg = document.getElementById('ghosint-debug');
     if (dbg) {
       dbg.style.display = 'block';
@@ -1078,9 +1098,12 @@ function ghosintFetch(query, type) {
 }
 
 function parseGhosintResponse(gh) {
-  // breach.vip risponde con { results: [...] }
-  if (!gh || !Array.isArray(gh.results)) return null;
-  return gh.results;
+  if (!gh) return null;
+  // breach.rip universal search risponde con { results: [...] } o { data: [...] }
+  if (Array.isArray(gh.results)) return gh.results;
+  if (Array.isArray(gh.data)) return gh.data;
+  if (gh.success && Array.isArray(gh.records)) return gh.records;
+  return null;
 }
 
 function doQuery() {
