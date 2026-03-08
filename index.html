@@ -2393,8 +2393,32 @@ function finishQuery(result, btn) {
   btn.textContent = 'Cerca →';
 }
 
-var BREACH_RIP_BASE = 'https://www.breach.rip/api';
+var BREACH_RIP_BASE = (typeof PROXY_BASE !== 'undefined' ? PROXY_BASE + '/proxy/breach-rip' : 'https://www.breach.rip/api');
 var BREACH_RIP_KEY = 'T44QdtP1r6QDS3HwvOpmDouVxHSTQPxf';
+
+// Proxy server URL - cambia con il tuo URL Render
+var PROXY_BASE = 'https://csintx-proxy.onrender.com';
+var BREACH_VIP_BASE = PROXY_BASE + '/proxy/breach-vip';
+var GHOSINT_BASE = PROXY_BASE + '/proxy/ghosint';
+var GHOSINT_KEY = '3982a6571d1cea8961cc2abab6fc0a1e';
+
+function bvSearch(term, fields, categories) {
+  var body = { term: term, fields: fields, wildcard: false, case_sensitive: false };
+  if (categories) body.categories = categories;
+  return fetch(BREACH_VIP_BASE + '/search', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+    body: JSON.stringify(body)
+  }).then(function(r){ return r.json(); }).catch(function(){ return null; });
+}
+
+function gsSearch(query, services) {
+  return fetch(GHOSINT_BASE + '/search', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+    body: JSON.stringify({ key: GHOSINT_KEY, query: query, services: services })
+  }).then(function(r){ return r.json(); }).catch(function(){ return null; });
+}
 
 // Esegue una singola chiamata POST a breach.rip
 function brCall(endpoint, body) {
@@ -2417,79 +2441,132 @@ function brGet(endpoint) {
 
 // Mappa tipo -> lista di chiamate da fare in parallelo
 function getBreachCalls(query, type) {
+  var enc = encodeURIComponent(query);
+  var gsAll   = ['ghosint.search','leakosint','leakcheck','snusbase','breachvip'];
+  var gsEmail = ['ghosint.search','leakosint','leakcheck','snusbase','breachvip','seon'];
+  var gsPhone = ['ghosint.search','leakosint','leakcheck','snusbase','seon'];
+  var gsUser  = ['ghosint.search','leakosint','leakcheck','snusbase','breachvip'];
+  var gsIP    = ['ghosint.search','leakosint','snusbase','breachvip'];
+  var gsPwd   = ['ghosint.search','snusbase','breachvip'];
+
   switch(type) {
-    case 'email':
+    case 'email': case 'seon-email': case 'holehe': case 'leakcheck':
+    case 'hackcheck': case 'breachbase': case 'breach-search': case 'leakosint':
+    case 'snusbase': case 'intelvault':
       return [
         brCall('/breachlookup/universal', { query: query, type: 'email' }),
         brCall('/osintdog/universal', { query: query }),
         brCall('/intelbase/email', { email: query }),
-        brCall('/breachhub/snusbase', null) // GET via alias
+        brCall('/breachhub/snusbase', { query: query }),
+        bvSearch(query, ['email']),
+        gsSearch(query, gsEmail)
       ];
-    case 'username':
+    case 'username': case 'github': case 'minecraft': case 'xbox':
+    case 'roblox-info': case 'subdomain': case 'victim':
       return [
         brCall('/breachlookup/universal', { query: query, type: 'username' }),
         brCall('/osintdog/universal', { query: query }),
         brCall('/intelbase/unified', { query: query, type: 'username' }),
-        brGet('/osintcat/username?username=' + encodeURIComponent(query))
+        brGet('/osintcat/username?username=' + enc),
+        bvSearch(query, ['username']),
+        gsSearch(query, gsUser)
       ];
-    case 'phone':
+    case 'phone': case 'seon-phone':
       return [
         brCall('/breachlookup/universal', { query: query, type: 'phone' }),
         brCall('/osintdog/universal', { query: query }),
         brCall('/intelbase/phone', { phone: query }),
-        brGet('/osintcat/phone?phone=' + encodeURIComponent(query))
+        brGet('/osintcat/phone?phone=' + enc),
+        bvSearch(query, ['phone']),
+        gsSearch(query, gsPhone)
       ];
-    case 'ip':
+    case 'ip': case 'shodan-host': case 'ip-info': case 'shodan-search':
       return [
         brCall('/breachlookup/universal', { query: query, type: 'ip' }),
         brCall('/osintdog/universal', { query: query }),
         brCall('/intelbase/ip', { ip: query }),
-        brCall('/stealerlogs/ip-geolocation', { ip: query })
+        brCall('/stealerlogs/ip-geolocation', { ip: query }),
+        bvSearch(query, ['ip']),
+        gsSearch(query, gsIP)
       ];
     case 'password':
       return [
         brCall('/breachlookup/universal', { query: query, type: 'password' }),
         brCall('/osintdog/universal', { query: query }),
-        brCall('/intelbase/unified', { query: query, type: 'password' })
+        brCall('/intelbase/unified', { query: query, type: 'password' }),
+        bvSearch(query, ['password']),
+        gsSearch(query, gsPwd)
       ];
-    case 'discord':
+    case 'discord': case 'discord-lookup': case 'discord-stalker':
+    case 'discord-info': case 'discord-history': case 'discord-roblox':
       return [
         brCall('/breachlookup/universal', { query: query, type: 'discord' }),
         brCall('/intelbase/discord', { discord_id: query }),
         brCall('/oathnet/discord-user', { user_id: query }),
-        brGet('/osintcat/discord?discord_id=' + encodeURIComponent(query))
+        brGet('/osintcat/discord?discord_id=' + enc),
+        bvSearch(query, ['discordid']),
+        gsSearch(query, gsAll)
       ];
-    case 'steam':
+    case 'steam': case 'steam-profile':
       return [
         brCall('/breachlookup/universal', { query: query, type: 'steam' }),
         brCall('/oathnet/steam', { steam_id: query }),
-        brGet('/osintcat/roblox?username=' + encodeURIComponent(query))
+        bvSearch(query, ['steamid']),
+        gsSearch(query, gsAll)
       ];
     case 'facebook':
       return [
         brCall('/breachlookup/universal', { query: query, type: 'username' }),
         brCall('/osintdog/universal', { query: query }),
-        brCall('/intelbase/unified', { query: query, type: 'username' })
+        bvSearch(query, ['username', 'email']),
+        gsSearch(query, gsEmail)
       ];
     case 'fivem':
       return [
         brCall('/breachlookup/universal', { query: query, type: 'username' }),
-        brCall('/intelbase/unified', { query: query, type: 'username' })
+        brCall('/intelbase/unified', { query: query, type: 'username' }),
+        bvSearch(query, ['username']),
+        gsSearch(query, gsUser)
       ];
     case 'doxbin':
       return [
         brCall('/breachlookup/universal', { query: query, type: 'username' }),
         brCall('/osintdog/universal', { query: query }),
-        brGet('/osintcat/doxbin?query=' + encodeURIComponent(query))
+        brGet('/osintcat/doxbin?query=' + enc),
+        bvSearch(query, ['username']),
+        gsSearch(query, gsUser)
       ];
     case 'npd':
       return [
         brCall('/breachlookup/universal', { query: query, type: 'email' }),
         brCall('/intelbase/unified', { query: query, type: 'email' }),
-        brGet('/osintcat/npd?query=' + encodeURIComponent(query))
+        brGet('/osintcat/npd?query=' + enc),
+        bvSearch(query, ['email']),
+        gsSearch(query, gsEmail)
+      ];
+    case 'stealer-legacy': case 'stealer-v2': case 'stealer-sub':
+      return [
+        brCall('/stealerlogs/ip-geolocation', { ip: query }),
+        brCall('/breachlookup/universal', { query: query, type: 'email' }),
+        brCall('/intelbase/unified', { query: query, type: 'email' }),
+        bvSearch(query, ['email', 'ip']),
+        gsSearch(query, gsEmail)
+      ];
+    case 'universal': case 'init-search': case 'db-autocomplete':
+      return [
+        brCall('/breachlookup/universal', { query: query, type: 'email' }),
+        brCall('/osintdog/universal', { query: query }),
+        brCall('/intelbase/unified', { query: query, type: 'email' }),
+        brCall('/breachlookup/universal', { query: query, type: 'username' }),
+        bvSearch(query, ['email', 'username', 'ip', 'phone']),
+        gsSearch(query, gsAll)
       ];
     default:
-      return [ brCall('/breachlookup/universal', { query: query, type: type }) ];
+      return [
+        brCall('/breachlookup/universal', { query: query, type: type }),
+        bvSearch(query, ['email', 'username']),
+        gsSearch(query, gsAll)
+      ];
   }
 }
 
@@ -2501,12 +2578,24 @@ function ghosintFetch(query, type) {
     responses.forEach(function(d, i) {
       if (!d) return;
       var arr = null;
+      var srcNames = ['breach.rip','breach.rip/osintdog','breach.rip/intelbase','breach.rip/snusbase','breach.vip','ghosint.io'];
+      // ghosint.io format
+      if (d.success && Array.isArray(d.response)) {
+        d.response.forEach(function(svc) {
+          var svcArr = Array.isArray(svc.data) ? svc.data : (Array.isArray(svc.results) ? svc.results : null);
+          if (svcArr && svcArr.length > 0) {
+            svcArr.forEach(function(item){ item._source = 'ghosint.io/' + (svc.source || svc.name || 'search'); });
+            merged.results = merged.results.concat(svcArr);
+          }
+        });
+        return;
+      }
       if (Array.isArray(d.results)) arr = d.results;
       else if (Array.isArray(d.data)) arr = d.data;
       else if (Array.isArray(d.records)) arr = d.records;
       else if (d.result && typeof d.result === 'object') arr = [d.result];
       if (arr && arr.length > 0) {
-        arr.forEach(function(item){ item._source = 'breach.rip[' + i + ']'; });
+        arr.forEach(function(item){ item._source = srcNames[i] || ('source['+i+']'); });
         merged.results = merged.results.concat(arr);
       }
       // Aggiungi campi extra dalla risposta
@@ -2918,145 +3007,22 @@ function doQuery() {
       'roblox-info':'Roblox User Info','ip-info':'IP Information','holehe':'Holehe Email Check',
       'subdomain':'Subdomain Finder','db-autocomplete':'DB Autocomplete'
     };
-
-    var LEAKOSINT_URL = 'https://api.telegram.org/bot8764017156:JrRu3dfh/getUpdates';
-
-    function leakosintQuery(query, moduleName) {
-      // LeakOsint Bot API call
-      var payload = JSON.stringify({ query: query, module: moduleName });
-      return fetch('https://api.telegram.org/bot8764017156:JrRu3dfh/sendMessage', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          chat_id: '8764017156',
-          text: '/' + moduleName + ' ' + query
-        })
-      }).then(function(r) { return r.json(); }).catch(function() { return null; });
-    }
-
-    function renderUnlockedResult(result) {
-      var h = '<div class="img-result-grid">';
-      function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
-      function row(lbl, val, full) {
-        if(val===null||val===undefined||val==='') return '';
-        return '<div class="img-result-card'+(full?' full':'')+'"><div class="img-card-label">'+lbl+'</div><div class="img-card-val">'+esc(String(val))+'</div></div>';
-      }
-      h += row('MODULO', (labels[result.type]||result.type||'').toUpperCase(), true);
-      h += row('QUERY', result.query, true);
-      if (result.leakosint_data) {
-        var d = result.leakosint_data;
-        if (d.ok !== undefined) h += row('STATUS API', d.ok ? 'OK' : 'ERRORE', false);
-        if (d.result) {
-          var res = d.result;
-          Object.keys(res).forEach(function(k) {
-            var v = res[k];
-            if (typeof v === 'object') v = JSON.stringify(v);
-            h += row(k.replace(/_/g,' ').toUpperCase(), v, false);
-          });
-        }
-        if (d.List) {
-          h += row('RISULTATI TROVATI', d.List.length || 0, false);
-          if (d.List.length > 0) {
-            d.List.slice(0,5).forEach(function(item, i) {
-              if (typeof item === 'object') {
-                Object.keys(item).forEach(function(k) {
-                  h += row((i+1)+' — '+k.toUpperCase(), item[k], false);
-                });
-              } else {
-                h += row('RECORD ' + (i+1), item, false);
-              }
-            });
-            if (d.List.length > 5) h += row('...', '+ altri ' + (d.List.length-5) + ' record', false);
-          }
-        }
-      }
-      // Fallback mock data
-      Object.keys(result).forEach(function(k) {
-        if (['type','query','timestamp','module','status','leakosint_data'].indexOf(k) !== -1) return;
-        var v = result[k];
-        if (Array.isArray(v)) v = v.join(' | ');
-        if (typeof v === 'object') v = JSON.stringify(v);
-        h += row(k.replace(/_/g,' ').toUpperCase(), v, false);
-      });
-      h += '</div>';
-      return h;
-    }
-
-    // Call LeakOsint API
-    var leakModule = labels[type] || type;
-    fetch('https://api.telegram.org/bot8764017156:JrRu3dfh/sendMessage', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ chat_id: '8764017156', text: '/search ' + val + ' ' + leakModule })
-    })
-    .then(function(r) { return r.json(); })
-    .then(function(apiResp) {
-      return fetch('https://api.telegram.org/bot8764017156:JrRu3dfh/getUpdates?offset=-1')
-        .then(function(r){ return r.json(); })
-        .then(function(updates) {
-          var botReply = null;
-          if (updates && updates.result && updates.result.length > 0) {
-            var last = updates.result[updates.result.length - 1];
-            if (last.message) botReply = last.message.text;
-          }
-          return botReply;
-        });
-    })
-    .catch(function() { return null; })
-    .then(function(botText) {
-      var result = { type: type, query: val, timestamp: ts, module: leakModule, status: 'success', leakosint_data: {} };
-
-      if (botText) {
-        result.leakosint_data = { raw_response: botText };
-        // Parse response text into structured data
-        var lines = botText.split('\n').filter(function(l){ return l.trim(); });
-        lines.forEach(function(line) {
-          var parts = line.split(':');
-          if (parts.length >= 2) {
-            var key = parts[0].trim().toLowerCase().replace(/\s+/g,'_');
-            var val2 = parts.slice(1).join(':').trim();
-            result[key] = val2;
-          }
-        });
-        result.risposta_api = botText.slice(0, 300);
+    ghosintFetch(val, type).then(function(gh) {
+      var result = { type: type, query: val, timestamp: ts, module: labels[type]||type, sources: [] };
+      var records = parseGhosintResponse(gh);
+      if (records && records.length > 0) {
+        extractBreachFields(records, result);
       } else {
-        // Mock fallback
-        if (type === 'snusbase' || type === 'leakcheck' || type === 'hackcheck' || type === 'breachbase' || type === 'breach-search') {
-          result.found = true; result.breaches = Math.floor(Math.random()*15)+1;
-          result.passwords = Math.floor(Math.random()*3)+1; result.sources = 'breach.rip | snusbase | leakcheck';
-        } else if (type === 'leakosint' || type === 'intelvault') {
-          result.records = Math.floor(Math.random()*200)+10; result.databases = Math.floor(Math.random()*8)+1;
-        } else if (type === 'github') {
-          result.profile = 'https://github.com/' + val; result.repos = Math.floor(Math.random()*80)+1;
-          result.followers = Math.floor(Math.random()*500);
-        } else if (['discord-lookup','discord-stalker','discord-info','discord-history','discord-roblox'].indexOf(type)!==-1) {
-          result.discord_id = val; result.account_created = '20' + String(Math.floor(Math.random()*7)+17)+'-01-01';
-        } else if (type === 'steam-profile') {
-          result.steam64 = String(76561190000000000 + Math.floor(Math.random()*999999999));
-          result.games = Math.floor(Math.random()*500)+1;
-        } else if (type === 'minecraft') {
-          result.uuid = 'xxxxxxxx-xxxx-4xxx'.replace(/x/g,function(){return Math.floor(Math.random()*16).toString(16);});
-          result.premium = Math.random() > 0.3 ? 'SI' : 'NO';
-        } else if (type === 'holehe') {
-          result.platforms_found = Math.floor(Math.random()*15)+1;
-          result.platforms = 'Twitter | Instagram | GitHub | LinkedIn | Spotify';
-        } else if (type === 'subdomain') {
-          result.subdomains = Math.floor(Math.random()*50)+5;
-          result.examples = 'www.' + val + ' | api.' + val + ' | mail.' + val;
-        } else {
-          result.total_results = Math.floor(Math.random()*1000)+10;
-          result.status = 'completato';
-        }
+        result.total_records_found = 0;
+        result.note = 'Nessun dato trovato nei database';
       }
-
-      S.lastResult = result;
-      var out = document.getElementById('qe-output');
-      out.innerHTML = renderUnlockedResult(result);
-      document.getElementById('qe-counter').textContent = 'Risultati trovati';
-      document.getElementById('copy-result-btn').style.visibility = 'visible';
-      document.getElementById('export-result-btn').style.visibility = 'visible';
-      btn.disabled = false; btn.textContent = 'Cerca';
-      S.queriesDay++; saveKeyState();
+      ['email','username','phone','ip','discord_id','steam_id','country','isp'].forEach(function(k){
+        if (gh && gh[k]) result[k] = gh[k];
+      });
+      finishQuery(result, btn);
+    }).catch(function() {
+      finishQuery(generateMock(type, val), btn);
+      showToast('Errore connessione API', 'err');
     });
     return;
   }
